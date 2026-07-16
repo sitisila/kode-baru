@@ -1,0 +1,8 @@
+
+{
+  "name": "Sistem Deteksi Aset Lab Telkom University",
+  "description": "Sistem manajemen aset laboratorium berbasis QR Code untuk Telkom University dengan fitur peminjaman, persetujuan admin, dan pelacakan lokasi.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
