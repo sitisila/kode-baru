@@ -10,6 +10,7 @@ interface User {
   phoneNumber: string;
   nim: string;
   role: string;
+  assignedLab?: string | null;
 }
 
 interface AdminRoomTabProps {
@@ -21,25 +22,10 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
-
- 
-  const [isEnglish, setIsEnglish] = useState(false);
-
-  useEffect(() => {
-    const handleLangCheck = () => {
-      const pageText = document.body?.innerText || '';
-     
-      const hasEnglishMenu = pageText.includes('Manage Assets') || pageText.includes('Loan History') || pageText.includes('Active Monitoring');
-      
-      setIsEnglish(t?.lang === 'en' || localStorage.getItem('lang') === 'en' || hasEnglishMenu);
-    };
+  const [processingUserId, setProcessingUserId] = useState<number | string | null>(null);
 
 
-    const interval = setInterval(handleLangCheck, 400);
-    handleLangCheck();
-
-    return () => clearInterval(interval);
-  }, [t]);
+  const isEnglish = t?.lang === 'en';
 
   const API_URL = `${API_BASE_URL}/admin_users.php`;
   const DELETE_API_URL = `${API_BASE_URL}/delete_user.php`;
@@ -70,7 +56,42 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
     fetchUsers();
   }, []);
 
+  const labOptions = [
+    { id: 'Mechanical Workshop (G13)', name: 'Mechanical Workshop (G13)' },
+    { id: 'TelNet Laboratory (G4)', name: 'TelNet Laboratory (G4)' },
+    { id: 'OCS Laboratory (G9)', name: 'OCS Laboratory (G9)' },
+    { id: 'WiComm Laboratory (E3)', name: 'WiComm Laboratory (E3)' },
+    { id: 'CellComm Laboratory (A1)', name: 'CellComm Laboratory (A1)' },
+  ];
+
   const handleRoleChange = async (userId: number | string, currentRole: string, newRole: string) => {
+
+    let assignedLab: string | null = null;
+    if (newRole === 'Dosen') {
+      const labResult = await Swal.fire({
+        title: isEnglish ? 'Select Coordinated Laboratory' : 'Pilih Laboratorium yang Diampu',
+        input: 'select',
+        inputOptions: labOptions.reduce((acc: any, lab) => {
+          acc[lab.id] = lab.name;
+          return acc;
+        }, {}),
+        inputPlaceholder: isEnglish ? 'Select a laboratory...' : 'Pilih laboratorium...',
+        showCancelButton: true,
+        confirmButtonColor: '#5c1313',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: isEnglish ? 'Next' : 'Lanjut',
+        cancelButtonText: isEnglish ? 'Cancel' : 'Batal',
+        customClass: { popup: 'rounded-[2rem]' },
+        inputValidator: (value) => {
+          if (!value) {
+            return isEnglish ? 'Please select a laboratory.' : 'Silakan pilih laboratorium.';
+          }
+          return undefined;
+        }
+      });
+      if (!labResult.isConfirmed) return;
+      assignedLab = labResult.value;
+    }
     
     const confirmResult = await Swal.fire({
       title: isEnglish ? 'Are you sure?' : 'Apakah Anda yakin?',
@@ -84,18 +105,22 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
       customClass: { popup: 'rounded-[2rem]' }
     });
 
-    if (!confirmResult.isConfirmed) return; 
+   if (!confirmResult.isConfirmed) return; 
 
+    setProcessingUserId(userId);
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ userId, newRole })
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json' 
+        },
+
+        body: JSON.stringify({ userId, role: newRole, assignedLab }) 
       });
       
       const result = await response.json();
-      if (result.status === 'success') {
-
+      if (response.ok && result.status === 'success') {
         Swal.fire({ 
           title: isEnglish ? 'Success!' : 'Berhasil!', 
           text: isEnglish ? 'User role updated successfully.' : (result.message || 'Role pengguna berhasil diperbarui.'), 
@@ -124,10 +149,11 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
         customClass: { popup: 'rounded-[2rem]' }
       });
       fetchUsers();
+    } finally {
+      setProcessingUserId(null);
     }
   };
 
-  
   const handleDeleteUser = async (user: User) => {
 
   const confirm = await Swal.fire({
@@ -146,6 +172,7 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
 
   if (!confirm.isConfirmed) return;
 
+  setProcessingUserId(user.id);
   try {
 
     const response = await fetch(DELETE_API_URL,{
@@ -191,6 +218,8 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
       confirmButtonColor:'#5c1313'
     });
 
+  } finally {
+    setProcessingUserId(null);
   }
 
 }
@@ -261,22 +290,29 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({ authToken, t }) => {
                         <td className="px-6 py-4 font-mono text-xs text-gray-600">{user.nim || '-'}</td>
                         <td className="px-6 py-4 text-gray-500 text-xs">{user.phoneNumber || '-'}</td>
                         <td className="px-6 py-4">
-                          <div className="flex justify-center items-center gap-2">
-                            <select value={user.role} onChange={(e) => handleRoleChange(user.id, user.role, e.target.value)}
-                              className="px-4 py-2 border border-gray-200 rounded-xl outline-none focus:border-[#5c1313] font-bold text-xs bg-white text-gray-800 shadow-sm transition-all duration-300 cursor-pointer">
+                          <div className="flex flex-col justify-center items-center gap-1.5">
+                            <select value={user.role} disabled={processingUserId === user.id} onChange={(e) => handleRoleChange(user.id, user.role, e.target.value)}
+                              className="px-4 py-2 border border-gray-200 rounded-xl outline-none focus:border-[#5c1313] font-bold text-xs bg-white text-gray-800 shadow-sm transition-all duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                               <option value="Mahasiswa">{isEnglish ? 'Student' : 'Mahasiswa'}</option>
                               <option value="Asisten Laboratorium">{isEnglish ? 'Lab Assistant' : 'Asisten Laboratorium'}</option>
                               <option value="Dosen">{isEnglish ? 'Lecturer' : 'Dosen'}</option>
                               <option value="Admin">Admin</option>
                             </select>
+
+                            {user.role === 'Dosen' && user.assignedLab && (
+                              <span className="text-[9px] font-bold text-brand bg-brand/5 px-2 py-0.5 rounded-md border border-brand/10 uppercase tracking-wide">
+                                {labOptions.find(l => l.id === user.assignedLab)?.name || user.assignedLab}
+                              </span>
+                            )}
                           </div>
                         </td>
 
                         <td className="px-6 py-4 text-center">
                           <button
                             onClick={() => handleDeleteUser(user)}
-                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300">
-                            {isEnglish ? 'Delete' : 'Hapus'}
+                            disabled={processingUserId === user.id}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                            {processingUserId === user.id ? (isEnglish ? '...' : '...') : (isEnglish ? 'Delete' : 'Hapus')}
                           </button>
                         </td>
                       </tr>

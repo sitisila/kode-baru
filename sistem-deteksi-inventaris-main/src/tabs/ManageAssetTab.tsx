@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
+import { API_BASE_URL } from '../App';
 
 interface Asset {
   id?: number | string;
@@ -29,7 +30,8 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEnglish, setIsEnglish] = useState(false);
+
+  const isEnglish = t?.lang === 'en';
   const [isEditing, setIsEditing] = useState(false);
 
  
@@ -45,19 +47,11 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
     condition: 'GOOD',
     lab: 'Mechanical Workshop (G13)',
     serialNumber: '',
-    category: 'IT'
+    category: 'IT',
+    photoBase64: '',
+    photoPreviewUrl: ''
   });
-
-  useEffect(() => {
-    const handleLangCheck = () => {
-      const pageText = document.body?.innerText || '';
-      const hasEnglishMenu = pageText.includes('Manage Assets') || pageText.includes('Loan History') || pageText.includes('Active Monitoring');
-      setIsEnglish(t?.lang === 'en' || localStorage.getItem('lang') === 'en' || hasEnglishMenu);
-    };
-    const interval = setInterval(handleLangCheck, 300);
-    handleLangCheck();
-    return () => clearInterval(interval);
-  }, [t]);
+  const [photoError, setPhotoError] = useState('');
 
   const categories = [
     { id: 'ALL', idLabel: 'SEMUA', enLabel: 'ALL' },
@@ -68,7 +62,6 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
     { id: 'DOC', idLabel: 'ASET DOKUMEN & ADMINISTRASI', enLabel: 'DOCUMENT & ADMINISTRATIVE ASSETS' },
   ];
 
-  // 🎯 SINKRONISASI KATEGORI DATABASE SAKTI
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
       const assetName = String(asset.name || asset.asset_name || '').toLowerCase();
@@ -100,15 +93,45 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
       condition: asset.conditionStatus || asset.condition || 'GOOD',
       lab: asset.lab || 'Mechanical Workshop (G13)',
       serialNumber: asset.serialNumber || '',
-      category: asset.category || 'IT'
+      category: asset.category || 'IT',
+      photoBase64: '',
+      photoPreviewUrl: (asset as any).photo_path ? `${API_BASE_URL}/${(asset as any).photo_path}` : ''
     });
+    setPhotoError('');
     setIsModalOpen(true);
   };
 
   const handleOpenAddModal = () => {
     setIsEditing(false);
-    setFormData({ id: '', code: '', name: '', qty: '1', status: 'AVAILABLE', condition: 'GOOD', lab: 'Mechanical Workshop (G13)', serialNumber: '', category: 'IT' });
+    setFormData({ id: '', code: '', name: '', qty: '1', status: 'AVAILABLE', condition: 'GOOD', lab: 'Mechanical Workshop (G13)', serialNumber: '', category: 'IT', photoBase64: '', photoPreviewUrl: '' });
+    setPhotoError('');
     setIsModalOpen(true);
+  };
+
+  const MAX_PHOTO_SIZE_BYTES = 3 * 1024 * 1024;
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError('');
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('File harus berupa gambar.');
+      return;
+    }
+    if (file.size > MAX_PHOTO_SIZE_BYTES) {
+      setPhotoError('Ukuran gambar terlalu besar (maks 3MB).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setFormData(prev => ({ ...prev, photoBase64: dataUrl, photoPreviewUrl: dataUrl }));
+    };
+    reader.onerror = () => {
+      setPhotoError('Gagal membaca file gambar.');
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,7 +147,8 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
 
   const handleConfirmDelete = async () => {
     try {
-      const token = localStorage.getItem('token') || '';
+
+      const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || '';
       const response = await fetch(`https://prismafitd3tektel.site/prisma-api/delete_asset.php`, {
         method: 'POST',
         headers: {
@@ -147,7 +171,13 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
     }
   };
 
-  const handlePrintQR = (code: string, name: string) => {
+  const handlePrintQR = (code: string, name: string, condition?: string) => {
+    const conditionLower = String(condition || '').toLowerCase();
+    const isGoodCondition = conditionLower.includes('baik') || conditionLower.includes('good');
+    const labelColor = isGoodCondition ? '#15803d' : '#dc2626';
+    const labelColorLight = isGoodCondition ? '#dcfce7' : '#fee2e2';
+    const conditionText = condition || 'Belum Diketahui';
+
     const targetUrl = `https://prismafitd3tektel.site/?scanCode=${encodeURIComponent(code)}`;
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(targetUrl)}`;
     const printWindow = window.open('', '_blank');
@@ -157,10 +187,12 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
           <head>
             <title>Cetak QR Code - ${code}</title>
             <style>
+              * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               body { font-family: sans-serif; text-align: center; padding: 40px; }
-              .card { border: 2px dashed #5c1313; padding: 20px; display: inline-block; border-radius: 16px; background: #fff; }
+              .card { border: 3px solid ${labelColor}; padding: 20px; display: inline-block; border-radius: 16px; background: #fff; }
               h2 { margin: 12px 0 5px 0; font-size: 15px; text-transform: uppercase; color: #1e293b; font-weight: 900; }
               p { margin: 0; font-size: 11px; color: #5c1313; font-weight: 900; font-family: monospace; tracking-wider; }
+              .condition-badge { display: inline-block; margin-top: 10px; padding: 4px 10px; font-size: 10px; font-weight: 900; text-transform: uppercase; color: ${labelColor}; background: ${labelColorLight}; border-radius: 6px; }
             </style>
           </head>
           <body onload="window.print();">
@@ -168,6 +200,7 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
               <img src="${qrUrl}" alt="QR" style="width:140px; height:140px;" />
               <h2>${name}</h2>
               <p>${code}</p>
+              <div class="condition-badge">${conditionText}</div>
             </div>
           </body>
         </html>
@@ -228,7 +261,6 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
                 
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div className="w-14 h-14 bg-slate-50 border border-gray-100 rounded-xl flex items-center justify-center p-1 shrink-0">
-                    {/* Preview QR Code Terikat URL Tautan Aktif */}
                     <img 
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`https://prismafitd3tektel.site/?scanCode=${assetCode}`)}`} 
                       alt="QR" 
@@ -251,10 +283,9 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
                     {asset.status || 'TERSEDIA'}
                   </span>
                   
-                  {/* Cetak Ikon Tombol QR Code */}
                   <button
                     type="button"
-                    onClick={() => handlePrintQR(assetCode, assetName)}
+                    onClick={() => handlePrintQR(assetCode, assetName, asset.conditionStatus || asset.condition)}
                     className="p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-slate-900 hover:text-white border border-gray-100 transition-all active:scale-95 flex items-center justify-center shadow-sm"
                     title={isEnglish ? "Print QR Code" : "Cetak QR Code"}
                   >
@@ -303,7 +334,6 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
         )}
       </div>
 
-      {/* MODAL FORM TAMBAH / EDIT ASET */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
@@ -344,6 +374,17 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
               <div>
                 <label className="block text-[10px] font-black tracking-widest uppercase text-gray-400 mb-1">{isEnglish ? 'ASSET CODE' : 'KODE ASET'}</label>
                 <input type="text" required placeholder="Contoh: AST0001" value={formData.code} onChange={(e) => setFormData({...formData, code: e.target.value})} className="w-full bg-slate-50 text-xs font-bold rounded-xl px-3.5 py-3 border border-gray-100 text-utama" />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black tracking-widest uppercase text-gray-400 mb-1">{isEnglish ? 'ASSET PHOTO' : 'FOTO ASET'}</label>
+                <input type="file" accept="image/*" onChange={handlePhotoChange} className="w-full text-xs" />
+                {formData.photoPreviewUrl && (
+                  <img src={formData.photoPreviewUrl} alt="Pratinjau Foto Aset" className="mt-2 h-20 w-20 object-cover rounded-xl border border-gray-200" />
+                )}
+                {photoError && (
+                  <p className="mt-1 text-[10px] font-bold text-red-500">{photoError}</p>
+                )}
               </div>
 
               <div>
@@ -393,7 +434,6 @@ const ManageAssetTab: React.FC<ManageAssetTabProps> = ({ assets, onSaveAsset, cu
         </div>
       )}
 
-      {/* POP-UP MODAL KONFIRMASI HAPUS KUSTOM ESTETIK */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-sm p-8 border border-gray-100 shadow-2xl animate-in zoom-in-95 duration-200 text-center">

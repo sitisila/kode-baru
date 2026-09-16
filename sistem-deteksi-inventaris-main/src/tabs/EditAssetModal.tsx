@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import AssetQRCode from '../components/AssetQRCode';
 import Swal from 'sweetalert2'; 
+import { API_BASE_URL } from '../App';
 
 interface AddAssetModalProps {
   isOpen: boolean;
@@ -10,9 +11,10 @@ interface AddAssetModalProps {
   initialData?: any; 
   t: any;
   authToken?: string | null;
+  readOnly?: boolean;
 }
 
-const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave, labList, initialData, t }) => {
+const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave, labList, initialData, t, readOnly = false }) => {
   const [renderQR, setRenderQR] = useState(false);
 
   const [formData, setFormData] = useState<any>({
@@ -22,8 +24,10 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
     category: 'PERANGKAT IT & KOMPUTASI', conditionStatus: 'Baik', pic: '',
     description: '', accessories: '',
     manualBookUrl: '', photoMainUrl: '', photoLabelUrl: '',
+    photoBase64: '', photoPreviewUrl: '',
     quantity: 1, status: 'Tersedia'
   });
+  const [photoError, setPhotoError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -77,9 +81,13 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
           manualBookUrl: initialData.manualBookUrl || '',
           photoMainUrl: initialData.photoMainUrl || '',
           photoLabelUrl: initialData.photoLabelUrl || '',
+
+          photoBase64: '',
+          photoPreviewUrl: initialData.photo_path ? `${API_BASE_URL}/${initialData.photo_path}` : '',
           quantity: qty,
           status: initialData.status || 'Tersedia'
         });
+        setPhotoError('');
       } else {
         let defaultLab = 'Ruangan Admin (Aset Kantor)';
         if (labList && labList.length > 0) {
@@ -111,6 +119,32 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
     }));
   };
 
+  const MAX_PHOTO_SIZE_BYTES = 3 * 1024 * 1024;
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError('');
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('File harus berupa gambar.');
+      return;
+    }
+    if (file.size > MAX_PHOTO_SIZE_BYTES) {
+      setPhotoError('Ukuran gambar terlalu besar (maks 3MB).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setFormData((prev: any) => ({ ...prev, photoBase64: dataUrl, photoPreviewUrl: dataUrl }));
+    };
+    reader.onerror = () => {
+      setPhotoError('Gagal membaca file gambar.');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
@@ -132,9 +166,8 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
 
     if (result.isConfirmed) {
       try {
-        const token = localStorage.getItem('token') || localStorage.getItem('authToken');
-        
-        const res = await fetch(`http://localhost/prisma-api/delete_asset.php?id=${initialData.id}`, {
+        const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+        const res = await fetch(`${API_BASE_URL}/delete_asset.php?id=${initialData.id}`, {
           method: 'GET',
           headers: {
             ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -164,7 +197,6 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
     <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md z-[999] flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-6xl overflow-hidden border border-gray-100 my-8 animate-in fade-in zoom-in-95 duration-200">
         
-        {/* Header */}
         <div className="bg-brand h-20 flex items-center justify-between px-8 text-white relative">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10">
@@ -186,9 +218,8 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="p-8 lg:p-10 grid grid-cols-1 lg:grid-cols-12 gap-10 bg-gradient-to-b from-white to-slate-50/40 max-h-[calc(100vh-160px)] overflow-y-auto">
-          
+          <fieldset disabled={readOnly} className="contents">
           <section className="lg:col-span-7 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
@@ -240,7 +271,7 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* 🎯 KATEGORI ASET DIUBAH MENJADI DROPDOWN SESUAI DENGAN IMAGE_1C0164.PNG */}
+            
               <div>
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">KATEGORI ASET</label>
                 <select name="category" value={formData.category} onChange={handleChange} className="w-full px-5 py-4 rounded-2xl border border-slate-200 text-xs font-bold text-gray-700 bg-white cursor-pointer focus:outline-none focus:border-brand">
@@ -259,7 +290,7 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
               </div>
             </div>
 
-            {/* 🎯 HAPUS STATUS OPERASIONAL ASET & STATUS KELAYAKAN MENJADI FULL WIDTH GRID */}
+
             <div className="grid grid-cols-1 gap-5">
               <div>
                 <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">STATUS KELAYAKAN</label>
@@ -296,7 +327,8 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
                           name: formData.name || 'Tanpa Nama',
                           serialNumber: formData.serialNumber,
                           lab: formData.lab || 'Ruangan Admin',
-                          brandType: formData.brandType || '-'
+                          brandType: formData.brandType || '-',
+                          condition: formData.conditionStatus
                         }} 
                       />
                     ) : (
@@ -307,8 +339,15 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
                 ) : null}
                 
                 <div className="mt-6 border-2 border-dashed border-zinc-100 p-8 rounded-[2.5rem] flex flex-col items-center justify-center text-center">
-                  <p className="text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">FOTO UTAMA & LABEL SPEK</p>
-                  <input type="file" className="text-[10px] opacity-50" />
+                  <p className="text-[10px] font-black uppercase text-gray-400 mb-2 tracking-widest">FOTO UTAMA ASET</p>
+
+                  <input type="file" accept="image/*" onChange={handlePhotoChange} className="text-[10px] w-full" />
+                  {formData.photoPreviewUrl && (
+                    <img src={formData.photoPreviewUrl} alt="Pratinjau Foto Aset" className="mt-3 h-24 w-24 object-cover rounded-xl border border-gray-200" />
+                  )}
+                  {photoError && (
+                    <p className="mt-2 text-[10px] font-bold text-red-500">{photoError}</p>
+                  )}
                 </div>
                 
                 <div className="mt-6 border-2 border-dashed border-zinc-100 p-8 rounded-[2.5rem] flex flex-col items-center justify-center text-center">
@@ -317,8 +356,17 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
                 </div>
               </div>
             </div>
+          </section>
+          </fieldset>
 
-            <div className={`pt-6 grid gap-4 w-full ${initialData ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {readOnly ? (
+            <div className="lg:col-span-12 pt-2 w-full">
+              <button type="button" onClick={onClose} className="w-full py-5 bg-slate-100 hover:bg-slate-200 text-gray-700 rounded-[2.5rem] font-black uppercase text-[10px] tracking-wider flex items-center justify-center">
+                TUTUP
+              </button>
+            </div>
+          ) : (
+            <div className={`lg:col-span-12 pt-2 grid gap-4 w-full ${initialData ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {initialData && (
                 <button type="button" onClick={handleDeleteAsset} className="w-full py-5 bg-red-50 hover:bg-red-100 text-red-700 rounded-[2.5rem] font-black uppercase text-[10px] tracking-wider flex items-center justify-center">
                   HAPUS ALAT
@@ -328,7 +376,7 @@ const EditAssetModal: React.FC<AddAssetModalProps> = ({ isOpen, onClose, onSave,
                 {initialData ? 'PERBARUI DATA ASET' : 'TAMBAH ALAT'}
               </button>
             </div>
-          </section>
+          )}
 
         </form>
       </div>

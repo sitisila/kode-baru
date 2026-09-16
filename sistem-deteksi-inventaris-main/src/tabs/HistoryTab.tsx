@@ -13,13 +13,16 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
   const [condition, setCondition] = useState('Baik / Layak');
   const [notes, setNotes] = useState('');
-  const [photo, setPhoto] = useState('bukti_default.jpg'); 
+  const [photoBase64, setPhotoBase64] = useState('');
+  const [photoFileName, setPhotoFileName] = useState('');
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
+  const [photoError, setPhotoError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Kontrol pop-up detail data lengkap peminjaman
+  const MAX_PHOTO_SIZE_BYTES = 3 * 1024 * 1024;
+
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // DETEKTOR MULTI-LAYER BAHASA
   const isEnglish = 
     t?.lang === 'en' || 
     localStorage.getItem('lang') === 'en' || 
@@ -28,7 +31,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
     (t && Object.keys(t).length > 0 && t.historyTitle === 'LOAN HISTORY');
 
   const myLoans = loans.filter(l => {
-    if (currentUser?.role?.toLowerCase() === 'admin') return true;
+    const roleLower = currentUser?.role?.toLowerCase();
+    if (roleLower === 'admin' || roleLower === 'asisten laboratorium') return true;
+    if (roleLower === 'dosen') {
+      return currentUser?.assignedLab && l.lab === currentUser.assignedLab;
+    }
     return String(l.user_id || '') === String(currentUser?.id || currentUser?.user_id || '');
   });
 
@@ -36,17 +43,46 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
     setSelectedLoan(loan);
     setCondition('Baik / Layak');
     setNotes('');
-    setPhoto('bukti_default.jpg');
+    setPhotoBase64('');
+    setPhotoFileName('');
+    setPhotoPreviewUrl('');
+    setPhotoError('');
     setIsReturnModalOpen(true);
   };
 
-  // Buka Info Lengkap Detail
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError('');
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setPhotoError(isEnglish ? 'File must be an image.' : 'File harus berupa gambar.');
+      return;
+    }
+    if (file.size > MAX_PHOTO_SIZE_BYTES) {
+      setPhotoError(isEnglish ? 'Image is too large (max 3MB).' : 'Ukuran gambar terlalu besar (maks 3MB).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setPhotoBase64(dataUrl);
+      setPhotoFileName(file.name);
+      setPhotoPreviewUrl(dataUrl);
+    };
+    reader.onerror = () => {
+      setPhotoError(isEnglish ? 'Failed to read the image file.' : 'Gagal membaca file gambar.');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const openDetailModal = (loan: any) => {
     setSelectedLoan(loan);
     setIsDetailModalOpen(true);
   };
 
-  // Fungsi Hapus Riwayat (Khusus Admin)
+
   const handleDeleteLoan = async (loanId: any) => {
     Swal.fire({
       title: isEnglish ? 'Are you sure?' : 'Apakah Anda yakin?',
@@ -61,14 +97,15 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
     }).then(async (result) => {
       if (result.isConfirmed) {
         try {
-          const token = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
+
+          const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || '';
           const res = await fetch(`${API_BASE_URL}/delete_loan.php`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ id: loanId, token: token })
+            body: JSON.stringify({ id: loanId })
           });
 
           const data = await res.json();
@@ -95,20 +132,26 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
     e.preventDefault(); 
     if (!selectedLoan) return;
 
+    if (!photoBase64) {
+      setPhotoError(isEnglish ? 'Return proof photo is required.' : 'Foto bukti pengembalian wajib diisi.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token') || localStorage.getItem('authToken') || '';
+      const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || '';
       
       const payload = {
         loanId: selectedLoan.id || selectedLoan.loan_id,
         assetId: selectedLoan.asset_id || selectedLoan.assetId,
         condition: condition,
         notes: notes,
-        photo: photo 
+        photoBase64: photoBase64,
+        photoFileName: photoFileName
       };
 
-      const res = await fetch(`${API_BASE_URL}/return_loan.php?token=${token}`, {
+      const res = await fetch(`${API_BASE_URL}/return_loan.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,10 +163,11 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
       const result = await res.json();
 
       if (result.status === 'success') {
+
         Swal.fire({
           title: isEnglish ? 'Success!' : 'Berhasil!',
-          text: isEnglish ? 'Item return request submitted successfully.' : (result.message || 'Barang berhasil dikembalikan'),
-          icon: 'success',
+          text: result.photo_warning || (isEnglish ? 'Item return request submitted successfully.' : (result.message || 'Barang berhasil dikembalikan')),
+          icon: result.photo_warning ? 'warning' : 'success',
           confirmButtonColor: '#5c1313',
           customClass: { popup: 'rounded-[2rem]' }
         });
@@ -152,8 +196,10 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
         </p>
       </div>
 
-      <div className="overflow-hidden bg-white rounded-[2.5rem] border border-gray-100 shadow-sm mx-2">
-        <table className="w-full text-left border-collapse">
+
+      <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm mx-2 overflow-hidden">
+        <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[600px]">
           <thead>
             <tr className="bg-utama text-white">
               <th className="p-6 text-[10px] font-black uppercase tracking-widest">{isEnglish ? 'ASSET & QTY' : 'ASET & QTY'}</th>
@@ -211,7 +257,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
                           </button>
                         )}
 
-                        {/* 🎯 BUTTON 2: DETAIL DATA (Ikon Kotak Abu Halus) */}
                         <button
                           type="button"
                           onClick={() => openDetailModal(loan)}
@@ -224,7 +269,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
                           </svg>
                         </button>
 
-                        {/* 🎯 BUTTON 3: HAPUS RIWAYAT (Ikon Kotak Merah Lembut) */}
+ 
                         {currentUser?.role?.toLowerCase() === 'admin' && (
                           <button
                             type="button"
@@ -251,9 +296,10 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
-      {/* Form Modal Pengembalian */}
+
       {isReturnModalOpen && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md z-[999] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
@@ -282,13 +328,16 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">{isEnglish ? 'Return Proof Photo' : 'Foto Bukti Pengembalian'}</label>
                 <input 
                   type="file" 
-                  onChange={(e) => {
-                    if(e.target.files && e.target.files[0]) {
-                      setPhoto(e.target.files[0].name);
-                    }
-                  }}
+                  accept="image/*"
+                  onChange={handlePhotoChange}
                   className="w-full block text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-brand/10 file:text-brand hover:file:bg-brand/20 cursor-pointer" 
                 />
+                {photoPreviewUrl && (
+                  <img src={photoPreviewUrl} alt="Preview" className="mt-2 h-24 w-24 object-cover rounded-xl border border-gray-200" />
+                )}
+                {photoError && (
+                  <p className="text-[10px] font-bold text-red-500">{photoError}</p>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -323,7 +372,6 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
         </div>
       )}
 
-      {/* MODAL POP-UP DETAIL DATA LENGKAP */}
       {isDetailModalOpen && selectedLoan && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md z-[999] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 border border-gray-100 shadow-2xl overflow-hidden">
@@ -343,21 +391,24 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
             </div>
 
             <div className="space-y-4 text-left max-h-[60vh] overflow-y-auto pr-1">
-              
-              {/* Seksi Aset */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100">
+
+              <h5 className="text-[10px] font-black text-brand uppercase tracking-[0.2em]">
+                {isEnglish ? 'Loan Detail' : 'Detail Peminjaman'}
+              </h5>
+
+                <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100">
                 <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'ASSET INFO' : 'INFORMASI ASET'}</span>
                 <h4 className="font-black text-utama text-base uppercase leading-tight">{selectedLoan.assetName || selectedLoan.asset_name || 'Aset'}</h4>
                 <p className="text-[10px] font-mono font-bold text-brand mt-1">CODE: {selectedLoan.assetCode || selectedLoan.asset_code || '-'} | QTY: {selectedLoan.quantity || selectedLoan.qty || 1} PCS</p>
                 {selectedLoan.lab && <p className="text-[9px] font-bold text-gray-400 uppercase mt-0.5">LAB: {selectedLoan.lab}</p>}
               </div>
 
-              {/* Seksi Peminjam */}
+              
               <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100 space-y-2">
                 <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'BORROWER INFO' : 'DATA LENGKAP PEMINJAM'}</span>
                 <div className="grid grid-cols-3 text-xs font-bold gap-y-1">
                   <span className="text-gray-400 uppercase">{isEnglish ? 'NAME' : 'NAMA'}</span>
-                  <span className="col-span-2 text-utama uppercase font-black">: {selectedLoan.borrowerName || selectedLoan.user_name || selectedLoan.name || 'Mahasiswa'}</span>
+                  <span className="col-span-2 text-utama uppercase font-black">: {selectedLoan.borrower_name || selectedLoan.userName || selectedLoan.borrowerName || selectedLoan.user_name || selectedLoan.name || 'Mahasiswa'}</span>
 
                   <span className="text-gray-400 uppercase">NIM / NIP</span>
                   <span className="col-span-2 text-utama font-mono">: {selectedLoan.borrowerNim || selectedLoan.nim || '-'}</span>
@@ -367,7 +418,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
                 </div>
               </div>
 
-              {/* Seksi Waktu & Status */}
+              
               <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100 space-y-2">
                 <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'TIME & STATUS' : 'WAKTU & STATUS'}</span>
                 <div className="grid grid-cols-3 text-xs font-bold gap-y-1">
@@ -389,17 +440,63 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ t, loans, currentUser }) => {
                 </div>
               </div>
 
-              {/* Seksi Keperluan */}
+
               <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100">
                 <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'LOAN PURPOSE' : 'KEPERLUAN PINJAM'}</span>
                 <p className="text-xs font-bold text-utama bg-white p-3 rounded-xl border border-gray-100 italic">
-                  "{selectedLoan.purpose || selectedLoan.notes || (isEnglish ? 'No description provided' : 'Tidak ada keterangan keperluan')}"
+                  "{selectedLoan.purpose || (isEnglish ? 'No description provided' : 'Tidak ada keterangan keperluan')}"
                 </p>
               </div>
 
+              {(() => {
+                const statusUpper = String(selectedLoan.status || '').toUpperCase();
+                const isReturnedLoan = statusUpper === 'RETURNED' || statusUpper === 'DIKEMBALIKAN';
+                if (!isReturnedLoan) return null;
+
+                const rawNotes = String(selectedLoan.notes || '');
+                const conditionMatch = rawNotes.match(/Kondisi:\s*(.*?)\s*\|/);
+                const catatanMatch = rawNotes.match(/Catatan:\s*(.*?)\s*\|/);
+                const fotoMatch = rawNotes.match(/Foto Bukti:\s*(.+)$/);
+
+                const returnCondition = conditionMatch?.[1] || '-';
+                const returnNotes = catatanMatch?.[1] || (isEnglish ? 'No notes' : 'Tidak ada catatan');
+                const fotoPath = fotoMatch?.[1]?.trim() || '';
+                const fotoUrl = fotoPath && !fotoPath.startsWith('bukti_default') && fotoPath !== 'gagal_disimpan'
+                  ? `${API_BASE_URL}/${fotoPath}`
+                  : '';
+
+                return (
+                  <>
+                    <h5 className="text-[10px] font-black text-brand uppercase tracking-[0.2em] pt-1">
+                      {isEnglish ? 'Return Detail' : 'Detail Pengembalian'}
+                    </h5>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-gray-100 space-y-3">
+                      <div className="grid grid-cols-3 text-xs font-bold gap-y-1">
+                        <span className="text-gray-400 uppercase">{isEnglish ? 'CONDITION' : 'KONDISI'}</span>
+                        <span className="col-span-2 text-utama">: {returnCondition}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'NOTES' : 'CATATAN'}</span>
+                        <p className="text-xs font-bold text-utama bg-white p-3 rounded-xl border border-gray-100 italic">"{returnNotes}"</p>
+                      </div>
+                      <div>
+                        <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">{isEnglish ? 'RETURN PROOF PHOTO' : 'FOTO BUKTI PENGEMBALIAN'}</span>
+                        {fotoUrl ? (
+                          <img src={fotoUrl} alt="Bukti Pengembalian" className="w-full max-h-64 object-contain rounded-xl border border-gray-100 bg-white" />
+                        ) : (
+                          <p className="text-[10px] font-bold text-gray-400 italic">
+                            {isEnglish ? 'No photo available (returned before photo upload was implemented).' : 'Tidak ada foto (dikembalikan sebelum fitur upload foto diaktifkan).'}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+
             </div>
 
-            {/* Tombol Tutup Detail */}
+         
             <div className="pt-4 border-t border-gray-50 mt-4">
               <button
                 type="button"

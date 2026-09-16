@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import AssetDetailReadOnly from './AssetDetailReadOnly';
 
 interface LabsTabProps {
   t: any;
@@ -14,19 +15,10 @@ const LabsTab: React.FC<LabsTabProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
-  const [isEnglish, setIsEnglish] = useState(false);
 
-  useEffect(() => {
-    const handleLangCheck = () => {
-      const pageText = document.body?.innerText || '';
-      const hasEnglishMenu = pageText.includes('Manage Assets') || pageText.includes('Loan History') || pageText.includes('Active Monitoring');
-      setIsEnglish(t?.lang === 'en' || localStorage.getItem('lang') === 'en' || localStorage.getItem('language') === 'en' || hasEnglishMenu);
-    };
-
-    const interval = setInterval(handleLangCheck, 300);
-    handleLangCheck();
-    return () => clearInterval(interval);
-  }, [t]);
+  const [assetForDetailView, setAssetForDetailView] = useState<any>(null);
+  const isEnglish = t?.lang === 'en';
+  const isDosen = currentUser?.role?.toLowerCase() === 'dosen';
 
   const labList = useMemo(() => [
     { id: 'Admin', name: 'Office', room: 'Office', color: 'from-gray-600 to-gray-800' },
@@ -36,6 +28,13 @@ const LabsTab: React.FC<LabsTabProps> = ({
     { id: 'WiComm', name: 'WiComm Laboratory (E3)', room: 'E3', color: 'from-green-500 to-green-700' },
     { id: 'CellComm', name: 'CellComm Laboratory (A1)', room: 'A1', color: 'from-cyan-500 to-cyan-700' },
   ], []);
+
+
+  useEffect(() => {
+    if (isDosen && !selectedLab && currentUser?.assignedLab) {
+      setSelectedLab(currentUser.assignedLab);
+    }
+  }, [isDosen, selectedLab, currentUser, setSelectedLab]);
 
   const categories = [
     { id: 'ALL', idLabel: 'SEMUA KLASIFIKASI', enLabel: 'ALL CLASSIFICATIONS' },
@@ -75,7 +74,6 @@ const LabsTab: React.FC<LabsTabProps> = ({
     });
   }, [assets, selectedLab]);
 
-  // 2. Filter lanjutan berdasarkan Search Bar kata kunci dan Klasifikasi Kategori SQL
   const filteredLabAssets = useMemo(() => {
     return baseLabAssets.filter(asset => {
       const assetName = String(asset.name || asset.asset_name || '').toLowerCase();
@@ -127,10 +125,13 @@ const LabsTab: React.FC<LabsTabProps> = ({
         </>
       ) : (
         <div className="space-y-6">
-          <button onClick={() => setSelectedLab(null)} className="flex items-center gap-2 text-gray-400 hover:text-brand font-black text-[10px] uppercase tracking-widest transition-colors border border-gray-100 bg-white px-5 py-2.5 rounded-xl active:scale-95">
-            <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7-7m-7 7h18"/></svg>
-            <span>{isEnglish ? 'BACK TO LIST' : 'KEMBALIKAN ASET'}</span>
-          </button>
+
+          {!isDosen && (
+            <button onClick={() => setSelectedLab(null)} className="flex items-center gap-2 text-gray-400 hover:text-brand font-black text-[10px] uppercase tracking-widest transition-colors border border-gray-100 bg-white px-5 py-2.5 rounded-xl active:scale-95">
+              <svg className="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7-7m-7 7h18"/></svg>
+              <span>{isEnglish ? 'BACK TO LIST' : 'KEMBALI KE DAFTAR'}</span>
+            </button>
+          )}
 
           <div className="relative overflow-hidden bg-gradient-to-r from-brand to-utama py-6 px-10 rounded-[2rem] text-white shadow-sm">
             <div className="relative z-10">
@@ -189,6 +190,11 @@ const LabsTab: React.FC<LabsTabProps> = ({
                         <button onClick={() => openLoanForm(asset)} disabled={!isAvailable} className={`text-[10px] font-black uppercase tracking-wider transition-all duration-300 px-5 py-3 rounded-xl border shadow-sm active:scale-95 ${isAvailable ? 'bg-brand text-white border-brand hover:bg-utama hover:border-utama' : 'bg-gray-50 text-gray-300 cursor-not-allowed border-gray-100 shadow-none'}`}>
                           {isEnglish ? 'BORROW ASSET' : 'PINJAM ALAT'}
                         </button>
+                      ) : isDosen ? (
+ 
+                        <button onClick={() => setAssetForDetailView(asset)} className="text-[10px] font-black uppercase tracking-wider transition-all duration-300 px-5 py-3 rounded-xl border shadow-sm active:scale-95 bg-utama/5 text-utama border-utama/20 hover:bg-utama/10">
+                          {isEnglish ? 'VIEW DETAIL' : 'LIHAT DETAIL'}
+                        </button>
                       ) : (
                         <span className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl">
                           {isEnglish ? 'STAFF CONTROL ONLY' : 'PEMANTAUAN PETUGAS'}
@@ -205,6 +211,15 @@ const LabsTab: React.FC<LabsTabProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {assetForDetailView && (
+        <AssetDetailReadOnly
+          isOpen={!!assetForDetailView}
+          onClose={() => setAssetForDetailView(null)}
+          asset={assetForDetailView}
+          t={t}
+        />
       )}
     </div>
   );

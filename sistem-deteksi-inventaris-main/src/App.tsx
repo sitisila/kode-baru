@@ -4,11 +4,11 @@ import { INITIAL_ASSETS, INITIAL_LOANS, TRANSLATIONS } from './constants';
 import Login from './Login';
 import DashboardMain from './DashboardMain';
 import QRScanner from './components/QRScanner';
+import ScanResultModal from './components/ScanResultModal';
 import Swal from 'sweetalert2'; 
 
 export const API_BASE_URL = "https://prismafitd3tektel.site/prisma-api";
 
-// 🎯 SAKTI: Kita suntik langsung properti database baru ke type ExtendedAsset disini biar TS(2339) musnah selamanya!
 type ExtendedAsset = Asset & {
   id?: number | string;
   name?: string;
@@ -25,11 +25,19 @@ type ExtendedAsset = Asset & {
   conditionStatus?: string;
   condition?: string;
   category?: string;
+  photo_path?: string;
 };
 
 const App: React.FC = () => {
-  const [lang, setLang] = useState<'id' | 'en'>('id');
-  const t = useMemo(() => TRANSLATIONS[lang], [lang]);
+  const [lang, setLang] = useState<'id' | 'en'>(() => {
+    const saved = localStorage.getItem('lang');
+    return saved === 'en' ? 'en' : 'id';
+  });
+  const t = useMemo(() => ({ ...TRANSLATIONS[lang], lang }), [lang]);
+
+  useEffect(() => {
+    localStorage.setItem('lang', lang);
+  }, [lang]);
 
   const [authToken, setAuthToken] = useState<string | null>(() => {
     return sessionStorage.getItem('authToken') || sessionStorage.getItem('token') ||
@@ -55,6 +63,7 @@ const App: React.FC = () => {
 
   const [isLoanFormOpen, setIsLoanFormOpen] = useState(false);
   const [selectedAssetForLoan, setSelectedAssetForLoan] = useState<ExtendedAsset | null>(null);
+  const [scanResultAsset, setScanResultAsset] = useState<ExtendedAsset | null>(null);
   const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [assetToPrint, setAssetToPrint] = useState<ExtendedAsset | null>(null);
@@ -130,6 +139,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleRefreshTrigger = () => {
       fetchLoans();
+      fetchAssets();
     };
     window.addEventListener('refreshLoansData', handleRefreshTrigger);
     return () => window.removeEventListener('refreshLoansData', handleRefreshTrigger);
@@ -169,10 +179,8 @@ const App: React.FC = () => {
         setCurrentUser(result.user);
         setAuthToken(result.token);
         
-        if (localStorage.getItem('prismafit_pending_scan')) {
-          setActiveTab('home');
-          sessionStorage.setItem('prismafit_active_tab', 'home');
-        }
+        setActiveTab('home');
+        sessionStorage.setItem('prismafit_active_tab', 'home');
         return true;
       } else {
         Swal.fire({
@@ -331,21 +339,7 @@ const App: React.FC = () => {
 
       if (foundAsset) {
         setIsScannerOpen(false); 
-        const currentStatus = String(foundAsset.status).toLowerCase();
-        if (currentStatus === 'available' || currentStatus === 'tersedia') { 
-          setSelectedAssetForLoan(foundAsset); 
-          setIsLoanFormOpen(true); 
-        } else { 
-          Swal.fire({
-            title: lang === 'id' ? 'Tidak Tersedia!' : 'Not Available!',
-            text: lang === 'id' 
-              ? `Aset ${foundAsset.name || foundAsset.asset_name || ''} sedang tidak tersedia.`
-              : `Asset ${foundAsset.name || foundAsset.asset_name || ''} is currently unavailable.`,
-            icon: 'warning',
-            confirmButtonColor: '#5c1313',
-            customClass: { popup: 'rounded-[2rem]' }
-          });
-        }
+        setScanResultAsset(foundAsset);
       } else {
         Swal.fire({
           title: lang === 'id' ? 'Tidak Ditemukan!' : 'Not Found!',
@@ -370,65 +364,6 @@ const App: React.FC = () => {
     });
   };
 
-  const handleReturnAsset = async (loanId: string) => { 
-    try {
-      const response = await authFetch(`${API_BASE_URL}/return_loan.php`, {
-        method: 'POST',
-        body: JSON.stringify({ loanId })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        Swal.fire({
-          title: lang === 'id' ? 'Berhasil!' : 'Success!',
-          text: lang === 'id' ? 'Aset berhasil dikembalikan.' : 'Asset returned successfully.',
-          icon: 'success',
-          confirmButtonColor: '#5c1313',
-          customClass: { popup: 'rounded-[2rem]' }
-        });
-        fetchLoans();
-        fetchAssets();
-      } else {
-        Swal.fire({
-          title: lang === 'id' ? 'Gagal!' : 'Failed!',
-          text: result.message,
-          icon: 'error',
-          confirmButtonColor: '#5c1313',
-          customClass: { popup: 'rounded-[2rem]' }
-        });
-      }
-    } catch (error) {
-      Swal.fire({
-        title: 'Error!',
-        text: lang === 'id' ? 'Gagal terhubung ke server.' : 'Failed to reach the server.',
-        icon: 'error',
-        confirmButtonColor: '#5c1313',
-        customClass: { popup: 'rounded-[2rem]' }
-      });
-    }
-  };
-
-  const handleRejectReturn = async (loanId: string) => {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/reject_return.php`, {
-        method: 'POST',
-        body: JSON.stringify({ id: loanId })
-      });
-      const result = await response.json();
-      if (result.status === 'success') {
-        Swal.fire({
-          title: lang === 'id' ? 'Berhasil!' : 'Success!',
-          text: lang === 'id' ? 'Pengajuan pengembalian berhasil ditolak' : 'Return request successfully rejected.',
-          icon: 'info',
-          confirmButtonColor: '#5c1313',
-          customClass: { popup: 'rounded-[2rem]' }
-        });
-        fetchLoans();
-        fetchAssets();
-      }
-    } catch (err) {
-      console.error("Crash Fetch reject_return:", err);
-    }
-  };
 
   const filteredAssets = useMemo(() => {
     let result = assets;
@@ -526,8 +461,6 @@ const App: React.FC = () => {
           filteredAssets={filteredAssets as any}
           onSaveAsset={handleSaveNewAsset}
           onLoanSubmit={handleLoanSubmit}
-          onReturnAsset={handleReturnAsset} 
-          onRejectReturn={handleRejectReturn} 
         />
 
         {isScannerOpen && (
@@ -536,6 +469,21 @@ const App: React.FC = () => {
             onClose={() => setIsScannerOpen(false)} 
             lang={lang}
             t={t}
+          />
+        )}
+
+        {scanResultAsset && (
+          <ScanResultModal
+            asset={scanResultAsset}
+            currentUserRole={currentUser?.role || ''}
+            isAvailable={['available', 'tersedia'].includes(String(scanResultAsset.status).toLowerCase())}
+            lang={lang}
+            onClose={() => setScanResultAsset(null)}
+            onBorrow={() => {
+              setSelectedAssetForLoan(scanResultAsset);
+              setIsLoanFormOpen(true);
+              setScanResultAsset(null);
+            }}
           />
         )}
       </div>

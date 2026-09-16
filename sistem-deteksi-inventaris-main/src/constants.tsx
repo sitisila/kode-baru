@@ -10,7 +10,7 @@ export const COLORS = {
 export const TRANSLATIONS: Record<string, any> = {
   id: {
     welcome: "Selamat Datang!",
-    loginDesc: "Pengelolaan, pemantauan, dan peminjaman alat laboratorium Laboratorium Fakultas Ilmu Terapan Telkom University",
+    loginDesc: "Pengelolaan, pemantauan, dan peminjaman alat Laboratorium D3 Teknologi Telekomunikasi, Fakultas Ilmu Terapan, Telkom University",
     usernameLabel: "Username",
     passwordLabel: "Kata Sandi",
     loginBtn: "Masuk",
@@ -25,13 +25,12 @@ export const TRANSLATIONS: Record<string, any> = {
     manageAssets: "Kelola Aset",
     addAsset: "Tambah Alat Baru",
     loans: "Persetujuan",
-    monitoring: "Monitoring",
     admin: "Panel Kontrol",
     profile: "Profil Saya",
     scanBtn: "Pindai QR",
     scanTitle: "Pindai Kode QR Aset",
     scanDesc: "Arahkan kamera ke kode QR yang tertempel di alat",
-    searchPlaceholder: "Cari seluruh aset berdasarkan nama atau kode...", // Updated translation
+    searchPlaceholder: "Cari seluruh aset berdasarkan nama atau kode...", 
     borrowBtn: "PINJAM ALAT",
     available: "TERSEDIA",
     borrowed: "DIPINJAM",
@@ -55,7 +54,7 @@ export const TRANSLATIONS: Record<string, any> = {
     approve: "Setujui",
     reject: "Tolak",
     printLabel: "Cetak Label QR",
-    formTitle: "Form Paimanjaman Alat",
+    formTitle: "Form Peminjaman Alat",
     deadlineWarning: "Peringatan: Alat wajib dikembalikan ke Laboran sebelum jam 18:00 WIB di hari yang sama.",
     studentNim: "NIM",
     class: "Kelas",
@@ -85,18 +84,18 @@ export const TRANSLATIONS: Record<string, any> = {
     noRecentData: "Belum ada data",
     statusLabel: "Status",
     labListTitle: "Daftar Laboratorium",
-    labListDesc: "Silahkan pilih laboratorium untuk melihat aset", // Match with list implementation
+    labListDesc: "Silahkan pilih laboratorium untuk melihat aset", 
     roomLabel: "Ruang",
     viewAsset: "Lihat Aset",
     backToList: "Kembali ke Daftar",
     labInventory: "Inventaris Aset Laboratorium",
-    noAssetInLab: "TIDAK ADA ASET DI KLASIFIKASI INI", // Match with filter response
+    noAssetInLab: "TIDAK ADA ASET DI KLASIFIKASI INI", 
     adminInventoryTitle: "Inventaris Aset Admin",
     manageAssetTitle: "Kelola Data Aset",
     searchAssetPlaceholder: "Cari nama atau kode aset...",
     allFilter: "Semua",
     noCategory: "Tanpa Kategori",
-    dataNotFound: "Data Tidak Found",
+    dataNotFound: "Data Tidak Ditemukan",
     editBtn: "Edit",
     catIT: "Perangkat IT & Komputasi",
     catNet: "Perangkat Jaringan & Telekomunikasi",
@@ -148,7 +147,6 @@ export const TRANSLATIONS: Record<string, any> = {
     statusPending: "MENUNGGU",
     statusApproved: "DISETUJUI",
     statusRejected: "DITOLAK",
-    monitoringTitle: "Monitoring Aset",
     thBorrower: "Peminjam",
     thDeviceInfo: "Informasi Alat",
     thReturnEst: "Estimasi Kembali",
@@ -169,12 +167,21 @@ export const TRANSLATIONS: Record<string, any> = {
     noRecentDataDesc: "Mulai eksplorasi daftar laboratorium untuk melihat log atau mengajukan surat izin peminjaman alat.",
     estimatedLabel: 'EST. KEMBALI',
     stockLabel: 'STOK', 
-    monitorOnly: 'Hanya Pantau' 
+    monitorOnly: 'Hanya Pantau',
+    purposeLabel: 'Tujuan Peminjaman',
+    startDateLabel: 'Tanggal Mulai',
+    endDateLabel: 'Tanggal Kembali',
+    borrowTimeLabel: 'Jam Peminjaman',
+    quantityLabel: 'Jumlah Alat',
+    sending: 'MENGIRIM...',
+    submitRequestBtn: 'Kirim Permintaan',
+    assetLabel: 'Aset',
+    purposePlaceholder: 'Jelaskan untuk keperluan praktikum/penelitian apa...'
   },
 
   en: {
     welcome: "Welcome!",
-    loginDesc: "Management, monitoring, and borrowing of laboratory equipment at the Faculty of Applied Sciences, Telkom University",
+    loginDesc: "Management, monitoring, and borrowing of laboratory equipment at the D3 Telecommunication Technology Laboratory, Faculty of Applied Sciences, Telkom University",
     usernameLabel: "Username",
     passwordLabel: "Password",
     loginBtn: "Login",
@@ -189,16 +196,15 @@ export const TRANSLATIONS: Record<string, any> = {
     manageAssets: "Manage Assets",
     addAsset: "Add New Item",
     loans: "Approvals",
-    monitoring: "Monitoring",
     admin: "Control Panel",
     profile: "My Profile",
     scanBtn: "Scan QR",
     scanTitle: "Scan Asset QR Code",
     scanDesc: "Point camera at the QR code attached to the equipment",
-    searchPlaceholder: "Search all assets by name or code...", // Fully English
-    borrowBtn: "BORROW ASSET", // Fully English
-    available: "AVAILABLE", // Fully English
-    borrowed: "BORROWED", // Fully English
+    searchPlaceholder: "Search all assets by name or code...", 
+    borrowBtn: "BORROW ASSET", 
+    available: "AVAILABLE", 
+    borrowed: "BORROWED", 
     maintenance: "Maintenance",
     history: "History",
     historyTitle: "LOAN HISTORY", 
@@ -249,12 +255,12 @@ export const TRANSLATIONS: Record<string, any> = {
     noRecentData: "No data available",
     statusLabel: "Status",
     labListTitle: "Laboratory List",
-    labListDesc: "Please select a laboratory to view its assets", // Fully English
+    labListDesc: "Please select a laboratory to view its assets", 
     roomLabel: "Room",
     viewAsset: "View Assets",
     backToList: "Back to List",
     labInventory: "Laboratory Asset Inventory",
-    noAssetInLab: "NO ASSETS FOUND IN THIS CLASSIFICATION", // Fully English
+    noAssetInLab: "NO ASSETS FOUND IN THIS CLASSIFICATION", 
     adminInventoryTitle: "Admin Asset Inventory",
     manageAssetTitle: "Manage Asset Data",
     searchAssetPlaceholder: "Search asset name or code...",
@@ -312,7 +318,6 @@ export const TRANSLATIONS: Record<string, any> = {
     statusPending: "PENDING",
     statusApproved: "APPROVED",
     statusRejected: "REJECTED",
-    monitoringTitle: "Asset Monitoring",
     thBorrower: "Borrower",
     thDeviceInfo: "Device Information",
     thReturnEst: "Return Estimation",
@@ -333,7 +338,16 @@ export const TRANSLATIONS: Record<string, any> = {
     noRecentDataDesc: "Start exploring the laboratory list to view logs or submit equipment loan applications.",
     estimatedLabel: 'EST. RETURN',
     stockLabel: 'STOCK', 
-    monitorOnly: 'MONITOR ONLY' 
+    monitorOnly: 'MONITOR ONLY',
+    purposeLabel: 'Loan Purpose',
+    startDateLabel: 'Start Date',
+    endDateLabel: 'Return Date',
+    borrowTimeLabel: 'Borrow Time',
+    quantityLabel: 'Quantity',
+    sending: 'SENDING...',
+    submitRequestBtn: 'Submit Request',
+    assetLabel: 'Asset',
+    purposePlaceholder: 'Describe the purpose (practicum/research)...'
   }
 };
 

@@ -55,7 +55,6 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({
 
   const filteredData = useMemo(() => {
     return assets?.filter(a => {
-      // Menyinkronkan pencarian nama berbasis properti asset_name database
       const nameKey = a.asset_name || a.name || '';
       const matchesSearch = (
         nameKey.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -140,7 +139,7 @@ const AdminRoomTab: React.FC<AdminRoomTabProps> = ({
                      <p className="text-[10px] font-black text-brand uppercase tracking-[0.2em] mb-0.5">
                        {asset.category || 'Umum'}
                      </p>
-                     {/* FIX PENAMPILAN NAMA ASET DARI DATABASE */}
+                     
                      <h4 className="font-black text-gray-950 uppercase text-lg group-hover:text-brand transition-colors leading-tight">
                        {asset.asset_name || asset.name || 'Aset Tanpa Nama'}
                      </h4>

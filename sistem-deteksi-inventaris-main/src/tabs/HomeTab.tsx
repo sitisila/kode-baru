@@ -18,34 +18,25 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEnglish, setIsEnglish] = useState(false);
-
+  const isEnglish = t?.lang === 'en';
 
   const [assetSearchQuery, setAssetSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const isAdmin = currentUser?.role?.toLowerCase() === 'admin';
   const isMahasiswa = currentUser?.role?.toLowerCase() === 'mahasiswa';
+  const staffSeesAllLoans = ['admin', 'asisten laboratorium'].includes(currentUser?.role?.toLowerCase());
+  const isDosenCoordinator = currentUser?.role?.toLowerCase() === 'dosen';
   const currentUserId = currentUser?.id || currentUser?.user_id;
 
-
-  useEffect(() => {
-    const handleLangCheck = () => {
-      const pageText = document.body?.innerText || '';
-      const hasEnglishMenu = pageText.includes('Manage Assets') || pageText.includes('Loan History') || pageText.includes('Active Monitoring');
-      setIsEnglish(t?.lang === 'en' || localStorage.getItem('lang') === 'en' || localStorage.getItem('language') === 'en' || hasEnglishMenu);
-    };
-
-    const interval = setInterval(handleLangCheck, 300);
-    handleLangCheck();
-    return () => clearInterval(interval);
-  }, [t]);
 
 
   const stats = useMemo(() => {
     const myLoans = (loans || []).filter(loan => {
-      if (isAdmin) return true; 
-      
+      if (staffSeesAllLoans) return true; 
+      if (isDosenCoordinator) {
+        return currentUser?.assignedLab && loan.lab === currentUser.assignedLab;
+      }
 
       const loanUserId = String(loan.user_id || '');
       const loanNim = String(loan.nim || '');
@@ -64,32 +55,24 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
       );
     });
 
-    // 1. Hitung status DISETUJUI / APPROVED / ACTIVE
     const borrowedCount = myLoans.filter(l => 
       ['APPROVED', 'ACTIVE', 'DIPINJAM', 'BORROWED', 'DISETUJUI'].includes(String(l.status).toUpperCase())
     ).length;
-
-    // 2. Hitung status DIKEMBALIKAN / RETURNED
     const returnedCount = myLoans.filter(l => 
       ['RETURNED', 'DIKEMBALIKAN'].includes(String(l.status).toUpperCase())
     ).length;
 
-    // 3. Hitung status TERKENA DEADLINE (Peminjaman aktif & tanggal kembali melewati waktu saat ini)
-    const deadlineCount = myLoans.filter(l => {
-      const statusText = String(l.status).toUpperCase();
-      const isCurrentlyBorrowed = ['APPROVED', 'ACTIVE', 'DIPINJAM', 'BORROWED', 'DISETUJUI'].includes(statusText);
-      const targetDate = l.return_date || l.returnDate || l.tanggal_kembali;
-      
-      if (isCurrentlyBorrowed && targetDate) {
-        return new Date(targetDate).getTime() < new Date().getTime();
-      }
-      return false;
-    }).length;
+    if (isAdmin) {
+      console.log('[PRISMA-FIT DEBUG] Total loans:', myLoans.length);
+      console.log('[PRISMA-FIT DEBUG] Loan statuses:', myLoans.map(l => ({ id: l.id, status: l.status })));
+      console.log('[PRISMA-FIT DEBUG] borrowedCount (dihitung dari loans, INI yang dipakai untuk card Dipinjam):', borrowedCount);
+    }
 
-    return { borrowedCount, returnedCount, deadlineCount, myLoans };
-  }, [loans, currentUserId, currentUser, isAdmin]);
+   
 
-  // --- 🔄 STATE FORM PEMINJAMAN UPDATE ---
+    return { borrowedCount, returnedCount, myLoans };
+  }, [loans, currentUserId, currentUser, staffSeesAllLoans, isDosenCoordinator]);
+
   const [formData, setFormData] = useState({
     assetId: '',
     selectedAssetName: '',
@@ -105,7 +88,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
     const pendingScan = localStorage.getItem('prismafit_pending_scan');
     
     if (pendingScan && assets && assets.length > 0) {
-      // Cari data logistik di database kelompok lu yang kodenya klop dengan hasil scan QR
       const matchedAsset = assets.find(a => {
         const itemCode = String(a.code || a.asset_code || '').toUpperCase().trim();
         return itemCode === pendingScan.toUpperCase().trim();
@@ -126,10 +108,8 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
             reason: ''
           });
           
-          // Bersihkan storage biar kodenya gak gantung dan pop-up terus pas di-refresh
           localStorage.removeItem('prismafit_pending_scan');
           
-          // LANGSUNG JEDERRR MELUNCUR FORM MODALNYA DI BERANDA!
           setIsModalOpen(true);
         } else {
           localStorage.removeItem('prismafit_pending_scan');
@@ -147,7 +127,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
     }
   }, [assets, currentUser, isEnglish]);
 
-  // Filter list aset berdasarkan ketikan user di kolom pencarian alat
   const filteredAssetOptions = useMemo(() => {
     if (!assetSearchQuery) return assets;
     return assets.filter(a => {
@@ -206,6 +185,7 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
     const payload = {
       assetId: formData.assetId,
       asset_id: formData.assetId,
+      userId: currentUserId || currentUser?.id || currentUser?.user_id,
       assetName: selectedAsset?.asset_name || selectedAsset?.name || 'Alat Lab',
       startDate: startDateFormated,
       endDate: endDateFormated,
@@ -256,11 +236,10 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      {/* BANNER WELCOME */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-brand via-[#5c1313] to-utama py-6 px-10 rounded-[2rem] text-white shadow-lg shadow-brand/10 mx-2">
+      <div className="relative overflow-hidden bg-gradient-to-r from-brand via-[#5c1313] to-utama py-6 px-6 sm:px-10 rounded-[2rem] text-white shadow-lg shadow-brand/10 mx-2">
         <div className="absolute top-0 right-0 w-52 h-52 bg-white/[0.03] rounded-full blur-2xl"></div>
         <div className="relative z-10 max-w-2xl">
-          <span className="text-[9px] font-black tracking-[0.3em] uppercase bg-white/10 px-3 py-1 rounded-full border border-white/10">
+          <span className="inline-block max-w-full text-[7px] sm:text-[9px] font-black tracking-[0.15em] sm:tracking-[0.3em] uppercase bg-white/10 px-3 py-1 rounded-full border border-white/10 whitespace-nowrap overflow-hidden text-ellipsis">
             {isMahasiswa ? (isEnglish ? "Student Home Panel" : "Panel Beranda Mahasiswa") : (isEnglish ? "ASSET MONITORING SYSTEM" : "Sistem Monitoring Aset")}
           </span>
           <h3 className="text-3xl lg:text-4xl font-black tracking-tight mb-1 uppercase leading-none mt-3">PRISMA FIT</h3>
@@ -269,13 +248,14 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
               ? (isEnglish 
                   ? `Welcome back, ${currentUser?.name || 'User'}! Track active logistic loans, manage device return deadlines, and submit a loan form directly on this page.`
                   : `Selamat datang kembali, ${currentUser?.name || 'User Biasa'}! Pantau status peminjaman logistik aktif, kelola batas pengembalian barang, dan ajukan peminjaman alat langsung pada halaman ini.`)
-              : (isEnglish ? "Management, monitoring, and borrowing of laboratory equipment at the Faculty of Applied Sciences, Telkom University" : "Pengelolaan, pemantauan, dan peminjaman alat laboratorium Laboratorium Fakultas Ilmu Terapan Telkom University")}
+              : (isEnglish
+                  ? "Management, monitoring, and borrowing of laboratory equipment at the D3 Telecommunication Technology Laboratory, Faculty of Applied Sciences, Telkom University"
+                  : "Pengelolaan, pemantauan, dan peminjaman alat Laboratorium D3 Teknologi Telekomunikasi, Fakultas Ilmu Terapan, Telkom University")}
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* STATISTIK RINGKASAN */}
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center justify-between px-1 mx-2">
             <div className="flex items-center gap-3">
@@ -316,14 +296,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
                   </div>
                   <div className="p-3 rounded-xl bg-green-50"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
                 </div>
-
-                <div className="p-6 bg-white border border-red-100 rounded-[1.5rem] shadow-md sm:col-span-2 flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mb-1.5">{isEnglish ? "TOTAL ASSETS OVER DUE DEADLINE" : "TOTAL ASET TERKENA DEADLINE"}</p>
-                    <p className="text-4xl font-black text-brand tracking-tight">{stats.deadlineCount}</p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-brand/5"><svg className="w-5 h-5 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
-                </div>
               </>
             ) : (
               <>
@@ -338,7 +310,9 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
                 <div className="p-6 bg-white border border-gray-100/70 rounded-[1.5rem] shadow-md flex items-center justify-between">
                   <div>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{isEnglish ? "BORROWED" : "DIPINJAM"}</p>
-                    <p className="text-4xl font-black text-orange-500 tracking-tight">{stats.borrowedCount}</p>
+                    <p className="text-4xl font-black text-orange-500 tracking-tight">
+                      {stats.borrowedCount}
+                    </p>
                   </div>
                   <div className="p-3 rounded-xl bg-orange-50"><svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div>
                 </div>
@@ -357,7 +331,8 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
                   <div>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{isEnglish ? "AVAILABLE" : "TERSEDIA"}</p>
                     <p className="text-4xl font-black text-green-600 tracking-tight">
-                      {assets?.filter(a => ['AVAILABLE', 'TERSEDIA'].includes(String(a.status).toUpperCase())).length || 0}
+      
+                      {Math.max((assets?.length || 0) - stats.borrowedCount, 0)}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-green-50"><svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
@@ -367,7 +342,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
           </div>
         </div>
 
-        {/* PANDUAN LAB */}
         <div className="space-y-6 mx-2 lg:mx-0">
           <div className="flex items-center gap-3 px-1">
             <span className="w-1.5 h-4 bg-brand rounded-full"></span>
@@ -390,7 +364,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
         </div>
       </div>
 
-      {/* LOG AKTIVITAS BAWAH */}
       <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-gray-100/80 shadow-sm mx-2">
         <div className="flex items-center justify-between mb-6 px-1">
           <h4 className="text-[10px] font-black text-utama uppercase tracking-[0.25em]">
@@ -423,9 +396,9 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
                         )
                       ) : (
                         isEnglish ? (
-                          <>Student <span className="font-black text-brand">{loan.nim || 'Anonymous'}</span> requested asset <span className="font-semibold text-brand">{loan.assetName || loan.asset_name}</span></>
+                          <>Student <span className="font-black text-brand">{loan.NIM ||loan.nim || 'Anonymous'}</span> requested asset <span className="font-semibold text-brand">{loan.assetName || loan.asset_name}</span></>
                         ) : (
-                          <>Mahasiswa <span className="font-black text-brand">{loan.nim || 'Anonim'}</span> mengajukan alat <span className="font-semibold text-brand">{loan.assetName || loan.asset_name}</span></>
+                          <>Mahasiswa <span className="font-black text-brand">{loan.NIM || loan.nim || 'Anonim'}</span> mengajukan alat <span className="font-semibold text-brand">{loan.assetName || loan.asset_name}</span></>
                         )
                       )}
                     </p>
@@ -457,7 +430,6 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
         </div>
       </div>
 
-      {/* POP-UP MODAL PEMINJAMAN MAHASISWA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 border border-gray-100 shadow-2xl flex flex-col relative animate-in zoom-in-95 duration-200">
@@ -482,7 +454,7 @@ const HomeTab: React.FC<HomeTabProps> = ({ t, assets, loans, setActiveTab, curre
                   </div>
                   <div>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">NIM</p>
-                    <p className="text-xs font-black text-brand tracking-wider">{currentUser?.nim || currentUser?.username || '-'}</p>
+                    <p className="text-xs font-black text-brand tracking-wider">{currentUser?.NIM || currentUser?.nim || '-'}</p>
                   </div>
                   <div>
                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-0.5">{isEnglish ? "Phone Number" : "Nomor HP"}</p>

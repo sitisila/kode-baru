@@ -4,7 +4,6 @@ import ManageAssetTab from './tabs/ManageAssetTab';
 import LabsTab from './tabs/LabsTab';
 import AddAssetModal from './tabs/EditAssetModal'; 
 import ApprovalTab from './tabs/ApprovalTab';
-import MonitoringTab from './tabs/MonitoringTab'; 
 import HistoryTab from './tabs/HistoryTab';
 import AdminPanel from './tabs/AdminPanel'; 
 import Swal from 'sweetalert2';
@@ -20,7 +19,7 @@ interface DashboardProps {
   assets: any[];
   setAssets: React.Dispatch<React.SetStateAction<any[]>>;
   loans: any[];
-  activeTab: 'home' | 'labs' | 'manage-assets' | 'loans' | 'monitoring' | 'history' | 'admin-panel' | string;
+  activeTab: 'home' | 'labs' | 'manage-assets' | 'loans' | 'history' | 'admin-panel' | string;
   setActiveTab: React.Dispatch<React.SetStateAction<any>>;
   selectedLab: string | null;
   setSelectedLab: (lab: string | null) => void;
@@ -37,41 +36,29 @@ interface DashboardProps {
   filteredAssets: any[];
   onSaveAsset: (data: any) => void; 
   onLoanSubmit: (data: any) => void;
-  onReturnAsset?: (loanId: string) => void; 
-  onRejectReturn?: (loanId: string) => void; 
 }
 
 const DashboardMain: React.FC<DashboardProps> = ({
   currentUser, setCurrentUser, authToken, lang, setLang, t, assets, setAssets, loans, activeTab, setActiveTab, 
   selectedLab, setSelectedLab, setIsScannerOpen, setIsAddAssetOpen, isAddAssetOpen, 
   isLoanFormOpen, setIsLoanFormOpen, selectedAssetForLoan, setSelectedAssetForLoan,
-  openLoanForm, handlePrint, labList, filteredAssets, onLoanSubmit, onReturnAsset,
-  onRejectReturn 
+  openLoanForm, handlePrint, labList, filteredAssets, onLoanSubmit
 }) => {
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 1024;
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [processingLoanId, setProcessingLoanId] = useState<string | null>(null);
-  const [isEnglish, setIsEnglish] = useState(false);
-
 
   const [phoneInput, setPhoneInput] = useState('');
   const [borrowTimeInput, setBorrowTimeInput] = useState('');
   const [returnTimeInput, setReturnTimeInput] = useState('');
   const [courseInput, setCourseInput] = useState('');
   const [reasonInput, setReasonInput] = useState('');
-
-  // 🎯 DETEKTOR LIVE INTERNASIONALISASI ANTI-BOCOR
-  useEffect(() => {
-    const handleLangCheck = () => {
-      const pageText = document.body?.innerText || '';
-      const hasEnglishMenu = pageText.includes('Manage Assets') || pageText.includes('Loan History') || pageText.includes('Active Monitoring');
-      setIsEnglish(lang === 'en' || t?.lang === 'en' || localStorage.getItem('lang') === 'en' || hasEnglishMenu);
-    };
-    const interval = setInterval(handleLangCheck, 300);
-    handleLangCheck();
-    return () => clearInterval(interval);
-  }, [lang, t]);
+  const isEnglish = lang === 'en' || t?.lang === 'en';
 
 
   useEffect(() => {
@@ -90,8 +77,29 @@ const DashboardMain: React.FC<DashboardProps> = ({
     if (openLoanForm) openLoanForm(asset);
   };
 
+  const isWithinAllowedBorrowHours = (timeStr: string): boolean => {
+    if (!timeStr) return false;
+    const [h, m] = timeStr.split(':').map(Number);
+    const minutes = h * 60 + m;
+    return minutes >= 6 * 60 + 30 && minutes <= 18 * 60 + 30;
+  };
+
   const handleInlineLoanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isWithinAllowedBorrowHours(borrowTimeInput) || !isWithinAllowedBorrowHours(returnTimeInput)) {
+      Swal.fire({
+        title: isEnglish ? 'Invalid Time' : 'Jam Tidak Valid',
+        text: isEnglish
+          ? 'Loan and return time must be between 06:30 and 18:30.'
+          : 'Jam peminjaman dan pengembalian harus di antara 06.30 - 18.30 WIB.',
+        icon: 'warning',
+        confirmButtonColor: '#5c1313',
+        customClass: { popup: 'rounded-[2rem]' }
+      });
+      return;
+    }
+
     const today = new Date();
     const startDateFormated = today.toISOString().slice(0, 19).replace('T', ' ');
     const endDateFormated = today.toISOString().slice(0, 19).replace('T', ' ');
@@ -138,6 +146,8 @@ const DashboardMain: React.FC<DashboardProps> = ({
           confirmButtonColor: '#5c1313', 
           customClass: { popup: 'rounded-[2rem]' } 
         });
+
+        window.dispatchEvent(new CustomEvent('refreshLoansData'));
       } else {
         Swal.fire({ title: 'Gagal!', text: result.message, icon: 'error', confirmButtonColor: '#5c1313', customClass: { popup: 'rounded-[2rem]' } });
       }
@@ -168,6 +178,8 @@ const DashboardMain: React.FC<DashboardProps> = ({
           confirmButtonColor: '#5c1313', 
           customClass: { popup: 'rounded-[2rem]' } 
         });
+
+        window.dispatchEvent(new CustomEvent('refreshLoansData'));
       } else {
         Swal.fire({ title: 'Gagal!', text: result.message, icon: 'error', confirmButtonColor: '#5c1313', customClass: { popup: 'rounded-[2rem]' } });
       }
@@ -224,7 +236,6 @@ const DashboardMain: React.FC<DashboardProps> = ({
     { id: 'labs', label: lang === 'id' ? 'Daftar Laboratorium' : 'Laboratory List', icon: 'M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z', roles: ['admin', 'mahasiswa', 'dosen', 'asisten laboratorium'] },
     { id: 'manage-assets', label: lang === 'id' ? 'Kelola Aset' : 'Manage Assets', icon: 'M10.34 15.84c-.68.68-1.79.68-2.47 0M12 9V3m0 3c-1.66 0-3 1.34-3 3v.17c0 .44-.24.84-.62 1.06l-1.63.94c-.4.23-.65.66-.65 1.13v2.2c0 .47.25.9.65 1.13l1.63.94c.38.22.62.62.62 1.06V18c0 1.66 1.34 3 3 3s3-1.34 3-3v-.17c0-.44.24-.84.62-1.06l1.63-.94c.4-.23.65-.66.65-1.13v-2.2c0-.47-.25-.9-.65-1.13l-1.63-.94c-.38-.22-.62-.62-.62-1.06V9c0-1.66-1.34-3-3-3z', roles: ['admin', 'asisten laboratorium'] },
     { id: 'loans', label: lang === 'id' ? 'Persetujuan Peminjaman' : 'Loan Approvals', icon: 'M9 12.75L11.25 15 15 9.75M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z', roles: ['admin', 'asisten laboratorium'] },
-    { id: 'monitoring', label: lang === 'id' ? 'Pemantauan Aktif' : 'Active Monitoring', icon: 'M2.036 12.322a1.012 1.012 0 010-.644M21.396 11.32c.252.31.252.834 0 1.142Q18 17.5 12 17.5c-6 0-9.316-4.538-9.358-4.758a1.012 1.012 0 010-.644Q6 6.5 12 6.5c6 0 9.316 4.538 9.396 4.82zM15 12a3 3 0 11-6 0 3 3 0 016 0z', roles: ['admin', 'dosen', 'asisten laboratorium'] },
     { id: 'history', label: lang === 'id' ? 'Riwayat Peminjaman' : 'Loan History', icon: 'M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z', roles: ['admin', 'mahasiswa', 'dosen', 'asisten laboratorium'] },
     { id: 'admin-panel', label: lang === 'id' ? 'Kelola Pengguna' : 'Manage Users', icon: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z', roles: ['admin'] },
   ];
@@ -309,7 +320,6 @@ const DashboardMain: React.FC<DashboardProps> = ({
               );
             })}
 
-            {/* 🎯 REVISI SAKTI: BUTTON QR COCOK BERADA DI BAWAH KELOLA PENGGUNA (MANAGE USERS) */}
             <div className="px-6 py-3 border-t border-gray-50 mt-2">
               <button 
                 onClick={() => setIsScannerOpen(true)} 
@@ -328,7 +338,6 @@ const DashboardMain: React.FC<DashboardProps> = ({
           {activeTab === 'home' && <HomeTab t={t} assets={assets} loans={loans} setActiveTab={setActiveTab} currentUser={currentUser} onLoanSubmit={onLoanSubmit} />}
           {activeTab === 'labs' && <LabsTab t={t} assets={assets} selectedLab={selectedLab} setSelectedLab={setSelectedLab} openLoanForm={handleOpenLoanForm} currentUser={currentUser} />}
           {activeTab === 'loans' && <ApprovalTab t={t} loans={loans} onApprove={handleApproveLoan} onReject={handleRejectLoan} processingLoanId={processingLoanId} />}
-          {activeTab === 'monitoring' && <MonitoringTab t={t} loans={loans} onReturnAsset={(id) => onReturnAsset ? onReturnAsset(id) : undefined} onRejectReturn={(id) => onRejectReturn ? onRejectReturn(id) : undefined} />}
           {activeTab === 'history' && <HistoryTab t={t} loans={loans} currentUser={currentUser} />}
           {activeTab === 'admin-panel' && currentUser?.role?.toLowerCase() === 'admin' && <AdminPanel authToken={authToken} />}
           {activeTab === 'manage-assets' && <ManageAssetTab {...manageAssetTabProps} />}
@@ -337,7 +346,6 @@ const DashboardMain: React.FC<DashboardProps> = ({
 
       <AddAssetModal isOpen={isAddAssetOpen} onClose={() => setIsAddAssetOpen(false)} labList={labList} t={t} authToken={authToken} onSave={(data) => onSaveAssetHandler(data)} />
       
-      {/* 🎯 REVISI SAKTI INLINE MODAL */}
       {isLoanFormOpen && selectedAssetForLoan && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md p-8 border border-gray-100 shadow-2xl flex flex-col relative animate-in zoom-in-95 duration-200">
@@ -370,11 +378,11 @@ const DashboardMain: React.FC<DashboardProps> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-black tracking-widest uppercase text-gray-400 mb-1">{isEnglish ? "Borrow Time" : "Jam Pinjam"}</label>
-                  <input type="time" required value={borrowTimeInput} onChange={(e) => setBorrowTimeInput(e.target.value)} className="w-full bg-slate-50 text-xs font-bold rounded-xl px-3.5 py-3 border border-gray-100 text-utama" />
+                  <input type="time" required min="06:30" max="18:30" value={borrowTimeInput} onChange={(e) => setBorrowTimeInput(e.target.value)} className="w-full bg-slate-50 text-xs font-bold rounded-xl px-3.5 py-3 border border-gray-100 text-utama" />
                 </div>
                 <div>
                   <label className="block text-[10px] font-black tracking-widest uppercase text-gray-400 mb-1">{isEnglish ? "Return Time" : "Jam Selesai"}</label>
-                  <input type="time" required value={returnTimeInput} onChange={(e) => setReturnTimeInput(e.target.value)} className="w-full bg-slate-50 text-xs font-bold rounded-xl px-3.5 py-3 border border-gray-100 text-utama" />
+                  <input type="time" required min="06:30" max="18:30" value={returnTimeInput} onChange={(e) => setReturnTimeInput(e.target.value)} className="w-full bg-slate-50 text-xs font-bold rounded-xl px-3.5 py-3 border border-gray-100 text-utama" />
                 </div>
               </div>
 

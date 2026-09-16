@@ -9,11 +9,17 @@ interface AssetQRCodeProps {
     serialNumber: string;
     lab: string;
     brandType: string;
+    condition?: string;
   };
 }
 
 const AssetQRCode: React.FC<AssetQRCodeProps> = ({ t, assetData }) => {
   const qrValue = `ASSET_ID:${assetData.serialNumber}`;
+  const conditionLower = String(assetData.condition || '').toLowerCase();
+  const isGoodCondition = conditionLower.includes('baik') || conditionLower.includes('good');
+  const labelColor = isGoodCondition ? '#15803d' : '#dc2626';
+  const labelColorLight = isGoodCondition ? '#dcfce7' : '#fee2e2';
+  const conditionText = assetData.condition || (t?.lang === 'id' ? 'Belum Diketahui' : 'Unknown');
 
   const handlePrint = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -43,7 +49,7 @@ const AssetQRCode: React.FC<AssetQRCodeProps> = ({ t, assetData }) => {
             * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             @page { size: 80mm 30mm; margin: 0; }
             body { margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; height: 30mm; width: 80mm; font-family: 'Segoe UI', sans-serif; background-color: white; }
-            .label-container { display: flex; flex-direction: row; align-items: center; width: 76mm; height: 26mm; padding: 2mm; box-sizing: border-box; border: 1px solid #000; }
+            .label-container { display: flex; flex-direction: row; align-items: center; width: 76mm; height: 26mm; padding: 2mm; box-sizing: border-box; border: 2px solid ${labelColor}; }
             .qr-code { flex-shrink: 0; margin-right: 12px; }
             .qr-code img { width: 20mm; height: 20mm; }
             .details { display: flex; flex-direction: column; overflow: hidden; justify-content: center; }
@@ -51,6 +57,7 @@ const AssetQRCode: React.FC<AssetQRCodeProps> = ({ t, assetData }) => {
             .name { font-size: 9px; font-weight: bold; margin: 0; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
             .meta { font-size: 7px; margin: 1px 0; color: #333; font-weight: 600; }
             .sn-box { background: black; color: white; padding: 0 2px; }
+            .condition-badge { display: inline-block; margin-top: 2px; padding: 1px 4px; font-size: 6px; font-weight: 900; text-transform: uppercase; color: ${labelColor}; background: ${labelColorLight}; border-radius: 3px; }
           </style>
         </head>
         <body>
@@ -62,6 +69,7 @@ const AssetQRCode: React.FC<AssetQRCodeProps> = ({ t, assetData }) => {
               <div class="meta">SN: <span class="sn-box">${assetData.serialNumber}</span></div>
               <div class="meta">LOC: ${assetData.lab}</div>
               <div class="meta">TYPE: ${assetData.brandType}</div>
+              <span class="condition-badge">${conditionText}</span>
             </div>
           </div>
           <script>
@@ -80,11 +88,15 @@ const AssetQRCode: React.FC<AssetQRCodeProps> = ({ t, assetData }) => {
   };
 
   return (
-    <div className="flex flex-col items-center p-6 bg-white border-2 border-dashed border-gray-200 rounded-[2rem] hover:border-red-400 transition-colors group">
+    <div className={`flex flex-col items-center p-6 bg-white border-2 border-dashed rounded-[2rem] transition-colors group ${isGoodCondition ? 'border-green-200 hover:border-green-400' : 'border-red-200 hover:border-red-400'}`}>
       <div id="qr-hidden-source" style={{ display: 'none' }}>
         <QRCodeSVG value={qrValue} size={256} level="H" />
       </div>
-      <div className="mb-4 bg-gray-50 p-3 rounded-2xl">
+
+      <span className={`mb-2 px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${isGoodCondition ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+        {conditionText}
+      </span>
+      <div className={`mb-4 p-3 rounded-2xl border-2 ${isGoodCondition ? 'bg-green-50/50 border-green-100' : 'bg-red-50/50 border-red-100'}`}>
         <QRCodeSVG value={qrValue} size={100} level="M" />
       </div>
       <button type="button" onClick={handlePrint}

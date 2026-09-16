@@ -9,7 +9,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') { exit(0); }
 include 'config.php';
 include 'auth.php';
 
-// Validasi token sesi user logined
 $currentUser = requireAuth($conn);
 
 $data = json_decode(file_get_contents("php://input"));
@@ -21,11 +20,11 @@ if (empty($data->loanId) || empty($data->assetId) || empty($data->photo)) {
 }
 
 try {
-    // 1. Gabungkan data ke string formal (Menggunakan Baik / Layak, dll)
+
     $chosenCondition = !empty($data->condition) ? $data->condition : 'Baik / Layak';
     $finalNotes = "Kondisi: " . $chosenCondition . " | Catatan: " . $data->notes . " | Foto Bukti: " . $data->photo;
     
-    // Update status transaksi log peminjaman di tabel loans menjadi DIKEMBALIKAN
+    
     $stmt = $conn->prepare("UPDATE loans SET status = 'DIKEMBALIKAN', notes = ? WHERE id = ?");
     $stmt->execute([$finalNotes, (int)$data->loanId]);
 

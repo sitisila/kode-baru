@@ -7,11 +7,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit(0);
 }
 
-
 $host   = "localhost"; 
 $dbname = "u257381745_prisma_fit"; 
-$user   = "u257381745_prisma_user";     
-$pass   = "PrismaFit2026!";  
+$user   = "u257381745_prisma_user";      
+$pass   = "PrismaFit@2026!"; 
 
 try {
     $conn = new PDO(
